@@ -1,0 +1,31 @@
+---
+title: "set-up-hoopR"
+author: "Myles Thomas"
+date: "7/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r, eval=FALSE}
+# You can install using the pacman package using the following code:
+if (!requireNamespace('pacman', quietly = TRUE)){
+  install.packages('pacman')
+}
+pacman::p_load_current_gh("saiemgilani/hoopR")
+```
+
+```{r}
+library(hoopR)
+```
+
+
+```{r}
+hoopR::
+```
+
+

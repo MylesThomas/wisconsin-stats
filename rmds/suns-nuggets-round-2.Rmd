@@ -1,0 +1,134 @@
+---
+title: "suns-nuggets-round-2"
+author: "Myles Thomas"
+date: "6/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+
+
+
+
+
+
+
+```{r}
+headshots <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-player-info-headshots.xlsx")
+logos_and_colors <- read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-team-logos-and-colors.csv")
+
+headshots ; logos_and_colors
+```
+
+```{r}
+data <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nuggets-suns-game-2-advanced.xlsx")
+
+headshots <- headshots %>%
+  rename(Name = Column1) %>%
+  select(Name, headshot)
+
+data ; headshots
+
+plot_data <- dplyr::left_join(x = data, y = headshots, by = c("Starters"="Name")) %>%
+  select(logo_url, Starters, headshot, TS:DRtg)
+
+plot_data$TS <- plot_data$TS %>% as.numeric()
+plot_data$ORtg <- plot_data$ORtg %>% as.numeric()
+plot_data$DRtg <- plot_data$DRtg %>% as.numeric()
+
+plot_data <- plot_data %>%
+  mutate(NetRating = ORtg - DRtg)
+
+plot_data <- plot_data[order(-plot_data$NetRating), ]
+
+plot_data
+```
+
+
+```{r}
+# add headshots that we don't have already
+plot_data[6, 3] <-  "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/1626166.png" # cam payne
+plot_data[14, 3] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/1630210.png" # markus howard
+plot_data[16, 3] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/1629008.png" # mpj
+plot_data[19, 3] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/1630267.png" # campazzo
+
+plot_data
+```
+
+
+
+
+
+```{r}
+gt1 <- plot_data %>%
+  gt() %>%
+  text_transform(
+    locations = cells_body(c(logo_url, headshot)),
+    fn = function(x) {
+      web_image(
+        url = x,
+        height = gt::px(30)
+      )
+    }
+  ) %>%
+  cols_label(
+    headshot = "",
+    logo_url = "",
+    ORtg = "Offensive \nRating",
+    DRtg = "Defensive \nRating",
+    NetRating = "Net \nRating"
+  ) %>%
+  tab_source_note(
+    source_note = md("SOURCE: BasketballReference <br>TABLE: @WisconsinStats")
+  ) %>%
+  tab_header(title = md("**Nuggets at Suns - Game 2**"),
+             subtitle = md("Efficiency of players who played > 10 minutes")) %>%
+  gt_theme_538() %>%
+    data_color(
+    columns = c(TS),
+    colors = scales::col_numeric(
+      domain = c(.213,1.1),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) %>%
+  data_color(
+    columns = c(ORtg),
+    colors = scales::col_numeric(
+      domain = c(52, 204),
+      palette = c("#f8fcf8", "lightskyblue", "blue") # low number white, high number blue
+    )
+  ) %>%
+  data_color(
+    columns = c(DRtg),
+    colors = scales::col_numeric(
+      domain = c(133, 96),
+      palette = c("blue", "lightskyblue", "#f8fcf8") # low number blue, high number white
+    )
+  ) %>%
+    data_color(
+    columns = c(NetRating),
+    colors = scales::col_numeric(
+      domain = c(-110,110),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) 
+
+
+  
+# save
+gt::gtsave(data = gt1,
+           filename = "nuggets-suns-game-2.png",
+           path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots")
+```
+
+
+```{r}
+nba_team_logos_and_colors
+```
+

@@ -1,0 +1,387 @@
+---
+title: "qb-variance-2020"
+author: "Myles Thomas"
+date: "8/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+# load libraries
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(stringr)
+library(teamcolors)
+library(readxl)
+library(data.table)
+
+# more 
+library(tidyverse) # Data Cleaning, manipulation, summarization, plotting
+#library(gt) # beautiful tables
+library(DT) # beautiful interactive tables
+library(ggthemes) # custom pre-built themes
+#library(bbplot) # more themes
+library(ggtext) # custom text color
+library(teamcolors) # NFL team colors and logos
+library(ggforce) # better annotations
+library(ggridges) # many distributions at once
+library(ggrepel) # better labels
+library(ggbeeswarm) # beeswarm plots
+library(extrafont) # for extra fonts
+```
+
+
+```{r}
+# get full data
+full_data <- read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/all-files/pff-elite/game-grades-qb-2020.csv")
+
+# tranpose (keep column 1 with names)
+t_data <- full_data %>% transpose(keep.names = "player_name")
+
+# turn row 1 into the column names
+colnames(t_data) <- t_data[1, ]
+
+# remove row 1
+data2 <- t_data %>% slice(-1)
+
+# fix into tibble
+data2 <- as_tibble(data2)
+
+# fix into numerics
+data2 <- data2 %>% dplyr::mutate_at(.vars = vars(-("player_name")), .funs = as.numeric)
+
+# remove season_grade since we are not using that here
+data <- data2 %>% select(-c(season_grade))
+
+# print
+data
+```
+
+```{r}
+# use apply to get standard deviation
+data <- transform(data, standard_deviation = apply(data,         # the dataframe
+                                1,            # 1=rows, 2=columns
+                                sd,           # the function
+                                na.rm = T     # to ignore NA values    
+                                )
+          )
+
+# use dplyr::select() and rowSums to get week1-17 totals
+data %>% select(week_1:week_17) %>% rowSums(na.rm = T) -> data$summed_grades
+
+# write function to count the na's
+my_func <- function(x) sum(is.na(x))
+data$na_count <- apply(data, 1, my_func)
+
+# mutate in 17 - na's to get get number of games grades
+data %>% mutate(games_played = 17 - na_count) -> data
+
+# mutate in avg grade
+data %>% mutate(avg_game_grade = summed_grades / games_played) -> data
+
+# print
+data
+
+```
+
+
+```{r}
+# left join in the headshots for all these QB's
+headshots_df <- read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/all-files/headshots-qb-2020.csv")
+
+joined <- left_join(x = data, y = headshots_df)
+
+joined
+```
+
+```{r}
+# attach team colors to the players
+nfl_colors <- read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/all-files/nfl-team-logos.csv")
+
+# looking at this to get correct order below
+nfl_colors
+```
+
+
+```{r}
+# do this by hand with excel list of players in other window
+order_of_teams <- c(12, 30, 13, 16, 31, 29, 4, 8, 9, 17, 21, 2, 1, 11, 
+                    18, 3, 14, 24, 7, 20, 23, 19, 22, 9, 27, 15, 23,
+                    6, 5, 32, 20, 26, 10, 6, 25, 28, 26, 32)
+
+# grab correct rows in order, and columns
+tester <- nfl_colors %>%
+  slice(order_of_teams) %>%
+  select(name:secondary)
+
+# cbind
+cbind1 <- cbind(tester, joined)
+
+# print
+cbind1
+```
+
+
+
+```{r}
+# error bar plot
+cbind1 %>%
+  ggplot() +
+  geom_pointrange(aes(
+    x = reorder(player_name, avg_game_grade),
+    y = avg_game_grade,
+    ymin = avg_game_grade - standard_deviation,
+    ymax = avg_game_grade + standard_deviation,
+    color = primary
+  ),
+  size = 1.5) + 
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  coord_flip() + 
+  geom_point(aes(
+    x = reorder(player_name, avg_game_grade),
+    y = avg_game_grade,
+    color = primary
+  ),
+  size = 6.9) +
+  theme_fivethirtyeight() + 
+  theme_classic() +
+  labs(title = "Single game PFF grades for QB's in 2020 regular season",
+       subtitle = "Dot: Mean value of each single game grade \nError bar: 1 standard deviation +/- mean \n(Longer error bar = More inconsistent play game-to-game)",
+       x = NULL,
+       y = "PFF Grade",
+       caption = "<br>**Data:** PFF Premium Stats | **Plot:** @WisconsinStats") +
+    theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 15),
+    plot.caption = element_markdown(size = 12),
+    axis.text = element_text(size = 13)
+    )
+
+
+
+
+# save 
+ggsave(
+  filename = "qb-grade-variance-2020.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = last_plot(),
+  height = 10,
+  width = 16,
+  dpi = "retina"
+  )
+```
+
+
+```{r}
+# ranking variance
+cbind1 %>%
+  ggplot() +
+  geom_col(aes(
+    x = reorder(player_name, standard_deviation),
+    y = standard_deviation,
+    color = secondary,
+    fill = primary)) +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  ggimage::geom_image(aes(
+    x = reorder(player_name, -standard_deviation),
+    y = standard_deviation,
+    image = headshot_url
+  ),
+  size = 0.03) +
+  coord_flip() +
+  theme_fivethirtyeight() + 
+  theme_classic() +
+  labs(title = "Which Quarterbacks play the most consistent?",
+       subtitle = "Being more consistent does not necessarily make you better, \nbut it is interesting to see which QB's have a larger range of outcomes",
+       x = NULL,
+       y = "Standard Deviation of single-game PFF Grades",
+       caption = "<br>**Data:** PFF Premium Stats | **Plot:** @WisconsinStats") +
+    theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 15),
+    plot.caption = element_markdown(size = 12),
+    axis.text = element_text(size = 13)
+    )
+  
+
+
+# save 
+ggsave(
+  filename = "qb-grade-variance-2020-bar-graph.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = last_plot(),
+  height = 10,
+  width = 16,
+  dpi = "retina"
+  )
+```
+
+now to make the fitz plot...
+
+```{r}
+fitz <- cbind1 %>%
+  filter(player_name == "Ryan Fitzpatrick") %>%
+  transpose(keep.names = "week") %>%
+  slice(5:(5+16)) %>%
+  as_tibble()
+
+# fix na's
+vec <- ifelse(is.na(fitz$V1), 0, fitz$V1)
+vec -> fitz$V1
+
+# change name
+fitz <- fitz %>% rename(pff=V1)
+
+# add column
+fitz$week_num <- 1:17
+
+# change column to ordered factor
+factor(fitz$week_num, ordered = T) -> fitz$week_num
+
+# fix pff column to be numerics
+fitz %>% mutate_at(.vars = vars("pff"), .funs = as.numeric) -> fitz
+
+# print
+fitz
+```
+
+```{r}
+# add in the teams played against (dnp for na's)
+
+# make nfl_colors_2 that has an na's row
+color_of_choice <- "gray27"
+
+# links for tua
+espn_tua <- "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/4241479.png&w=350&h=254"
+nfl_tua <- "https://static.www.nfl.com/image/private/t_player_profile_landscape/f_auto/league/as7uxixavh5i6ouq6kg2"
+
+filler <- data.frame(name = "did_not_play",
+           primary = color_of_choice,
+           secondary = color_of_choice,
+           logo_url = nfl_tua)
+
+nfl_colors2 <- rbind(nfl_colors, filler)
+
+order_of_teams_2 <- c(22, 4, 5, 29, 28, 25, rep(33, 4), 10, 25, rep(33, 3), 17, 33)
+
+# combine
+joined2 <- nfl_colors2 %>%
+  slice(order_of_teams_2) %>%
+  cbind(fitz)
+
+# add groups to say whether or not he played
+as.factor(ifelse(joined2$pff==0, 0, 1)) -> joined2$group_binary
+
+# print
+joined2
+```
+
+
+
+```{r}
+joined2 %>%
+  ggplot() +
+  geom_col(aes(
+    x = week_num,
+    y = pff,
+    color = secondary,
+    fill = primary
+  )) + 
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) + 
+  ggimage::geom_image(aes(
+    x = week_num,
+    y = pff, 
+    image = logo_url
+  ),
+  size = 0.078) + 
+  scale_color_identity(aesthetics =  c("fill", "color"))
+
+
+
+# save 
+ggsave(
+  filename = "fitz-qb-grade-variance-2020.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = last_plot(),
+  height = 10,
+  width = 16,
+  dpi = "retina"
+  )  
+
+nfl_colors
+```
+
+```{r}
+joined2 %>%
+  ggplot() +
+  geom_line(aes(
+    x = week_num,
+    y = pff,
+    group = group_binary
+    #group = 1 # this makes all the lines connect
+  ),
+  color="#773141", size=2.4, alpha=0.9, linetype=1) + 
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) + 
+  ggimage::geom_image(aes(
+    x = week_num,
+    y = pff, 
+    image = logo_url
+  ),
+  size = 0.099) + 
+  scale_color_identity(aesthetics =  c("fill", "color")) + 
+  coord_cartesian(ylim = c(0, 100)) +
+  theme_fivethirtyeight() + 
+  theme_classic() +
+  labs(title = "Ryan Fitzpatrick's inconsistent play in the 2020 regular season",
+       subtitle = "Measured by single game PFF offensive grade \n(Did not get enough snaps in weeks with no grade)",
+       x = "Week",
+       y = "PFF Grade",
+       caption = "<br>**Data:** PFF Premium Stats | **Plot:** @WisconsinStats") +
+    theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 15),
+    plot.caption = element_markdown(size = 12),
+    axis.text = element_text(size = 13)
+    )
+  
+
+
+
+# save 
+ggsave(
+  filename = "fitz-qb-grade-variance-2020.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = last_plot(),
+  height = 10,
+  width = 16,
+  dpi = "retina"
+  )  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

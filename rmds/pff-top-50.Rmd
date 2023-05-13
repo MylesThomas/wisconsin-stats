@@ -1,0 +1,311 @@
+---
+title: "PFF top 50"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# load libraries
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(stringr)
+library(teamcolors)
+library(readxl)
+
+# more 
+library(tidyverse) # Data Cleaning, manipulation, summarization, plotting
+#library(gt) # beautiful tables
+library(DT) # beautiful interactive tables
+library(ggthemes) # custom pre-built themes
+#library(bbplot) # more themes
+library(ggtext) # custom text color
+library(teamcolors) # NFL team colors and logos
+library(ggforce) # better annotations
+library(ggridges) # many distributions at once
+library(ggrepel) # better labels
+library(ggbeeswarm) # beeswarm plots
+library(extrafont) # for extra fonts
+```
+
+
+# Getting list of players
+
+
+```{r}
+url <- "https://www.pff.com/news/nfl-pff50-ranking-50-best-players-nfl-2021"
+
+range <- 308:450
+
+full_lines <- read_lines(url)
+
+lines <- full_lines[range]
+
+nums <- lines %>% str_which("<h3>")
+
+nums %>% length()
+```
+
+```{r}
+subset <- lines[nums]
+
+subset
+```
+
+
+
+```{r}
+res <- str_match(subset, "noopener\">\\s*(.*?)\\s*</a>") # STRING1\\s*(.*?)\\s*STRING2
+
+names <- res[,2]
+
+names[42] <- "Grady Jarrett" # fix error
+
+names
+```
+
+# Getting Team Names
+
+```{r}
+subset
+```
+
+
+```{r}
+one <- subset %>%
+  str_match("noopener\">\\s*(.*?)\\s*</h3>")
+
+two <- one[,2] %>%
+  str_match("noopener\">\\s*(.*?)\\s*</a>")
+
+teams <- two[,2]
+
+teams[42] <- "Atlanta Falcons" # fix falcons
+
+teams
+```
+
+
+
+
+
+```{r}
+# first, make a df that we write to csv
+df <- tibble("Rank" = 1:50,
+             "Player" = names,
+             "Team" = teams
+             )
+
+# sort by team name alphabetically
+df <- df[order(df$Team, decreasing = F), ]
+
+df
+```
+
+
+```{r}
+# add in team color, logo, etc
+nfl_colors <- read.csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/all-files/nfl-team-logos.csv")
+
+# join
+join <- left_join(x = df,
+          y = nfl_colors,
+          by = c("Team" = "name"))
+join
+```
+
+
+```{r, eval=FALSE}
+# write to csv 
+#write.csv(x = write,
+#           file = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/pff-50-2.csv")
+```
+
+
+
+
+
+# Getting PFF grades
+
+Add the PFF grades / position by hand....
+
+
+
+
+```{r}
+# load the finished excel doc
+pff_50 <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/pff-50.xlsx")
+
+save_this <- pff_50
+
+df <- save_this
+
+df
+```
+
+```{r}
+# turn position into a factor
+df <- df %>%
+  mutate_at(.vars = vars(Position),
+            .funs = as.factor)
+
+df$Position
+```
+
+
+
+
+```{r}
+df %>% ggplot(aes(
+  x = Rank,
+  y = PFFGrade,
+  label = Player
+)) + geom_point(size=2, aes(color=primary, fill=primary)) + 
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  geom_smooth(method="lm", se = F, color="black") +
+  geom_text(size = 2.3) +
+  scale_x_continuous(breaks = c(1, seq(5, 50, 5))) + 
+  #scale_x_reverse(breaks = c(seq(50, 10, -10), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
+  labs(x = "Ranking on PFF50 heading into 2021 NFL Season",
+       y = "PFF Grade in 2021",
+       title = "2021 PFF50 Ranking vs 2020 PFF Grade",
+       subtitle = "sub",
+       caption = "<br>**Data:** PFF | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 15),
+    plot.subtitle = element_text(size = 10),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 9),
+    axis.title.y = element_text(size = 10, face = "bold", angle = 0, vjust = .5),
+    axis.title.x = element_text(size = 10, face = "bold")
+    # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    )
+  
+
+  
+```
+
+
+
+```{r}
+# scatterplot
+scat <- df %>% ggplot(aes(
+  x = Rank,
+  y = PFFGrade,
+  label = Player
+)) +
+  ggimage::geom_image(aes(
+    x = Rank,
+    y = PFFGrade,
+    image = logo_url
+  )) +
+  #geom_point(size=2, aes(color=primary, fill=primary)) + 
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  geom_smooth(method="lm", se = F, color="black") +
+  scale_x_continuous(breaks = c(1, seq(5, 50, 5))) + 
+  #scale_x_reverse(breaks = c(seq(50, 10, -10), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
+  labs(x = "Ranking on PFF50 heading into 2021 NFL Season",
+       y = "PFF Grade in 2021",
+       title = "2021 PFF50 Ranking vs 2020 PFF Grade",
+       subtitle = "Top right: better PFF grade than next season's rank suggests (expect regression) \nBottom left: better season projection than 2020 PFF grade would suggest (expect an even better season)",
+       caption = "<br>**Data:** PFF | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 15),
+    plot.subtitle = element_text(size = 10),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 9),
+    axis.title.y = element_text(size = 10, face = "bold", angle = 0, vjust = .5),
+    axis.title.x = element_text(size = 10, face = "bold")
+    # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    ) + 
+  geom_text_repel(size = 4,
+                  aes(color=primary,fill=primary),
+                  #box.padding = 0.7,
+                  point.padding = 0.5)
+  
+scat
+
+
+ggsave(
+  filename = "pff-50-scatterplot.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = scat,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+  
+```
+
+
+```{r}
+# by position
+scat2 <- df %>% ggplot(aes(
+  x = Rank,
+  y = PFFGrade,
+  label = Player
+)) +
+ # ggimage::geom_image(aes(x = Rank,y = PFFGrade,image = logo_url)) +
+  geom_point(size=2, aes(color=primary, fill=primary)) + 
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  #geom_smooth(method="lm", se = F, color="black") +
+  #scale_x_continuous(breaks = c(1, seq(5, 50, 5))) + 
+  #scale_x_reverse(breaks = c(seq(50, 10, -10), 1)) +
+  #scale_y_continuous(breaks = scales::pretty_breaks(n = 5)) +
+  labs(x = "Ranking on PFF50 heading into 2021 NFL Season",
+       y = "PFF Grade in 2021",
+       title = "2021 PFF50 Ranking vs 2020 PFF Grade",
+       subtitle = "By position group",
+       caption = "<br>**Data:** PFF | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 15),
+    plot.subtitle = element_text(size = 10),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 9),
+    axis.title.y = element_text(size = 10, face = "bold", angle = 0, vjust = .5),
+    axis.title.x = element_text(size = 10, face = "bold")
+    # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    ) + 
+  geom_text_repel(size = 3,
+                  aes(color=primary,fill=primary, x = Rank, y = PFFGrade, label = Player),
+                  point.padding = 0.1,
+                  box.padding = 0.1
+                  ) +
+  facet_wrap(~Position)
+  
+  
+scat2
+
+
+ggsave(
+  filename = "pff-50-scatterplot-by-position.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = scat2,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+
+```
+

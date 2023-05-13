@@ -1,0 +1,299 @@
+---
+title: "pythagorean-wins"
+author: "Myles Thomas"
+date: "7/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+# load libraries
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(stringr)
+library(teamcolors)
+library(readxl)
+
+# more 
+library(tidyverse) # Data Cleaning, manipulation, summarization, plotting
+#library(gt) # beautiful tables
+library(DT) # beautiful interactive tables
+library(ggthemes) # custom pre-built themes
+#library(bbplot) # more themes
+library(ggtext) # custom text color
+library(teamcolors) # NFL team colors and logos
+library(ggforce) # better annotations
+library(ggridges) # many distributions at once
+library(ggrepel) # better labels
+library(ggbeeswarm) # beeswarm plots
+library(extrafont) # for extra fonts
+library(caret) # machine learning
+```
+
+
+```{r}
+url <- 'https://www.pff.com/news/bet-2021-nfl-season-win-totals-tracker'
+webpage <- read_html(url)
+tbls <- html_nodes(webpage, "table")
+head(tbls)
+
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1:2] %>%
+        html_table(fill = TRUE)
+
+
+adj_totals <- tables[[2]]
+
+adj_totals <- adj_totals %>%
+  select(X1, X5) %>%
+  filter(X1 != "") %>%
+  filter(!grepl('AFC|NFC', X1))
+  
+
+colnames(adj_totals) <- adj_totals[1, ]
+
+adj_totals <- adj_totals %>% rename(market_adj_wins = `Adjusted total`) %>%
+  rename(team=Team) %>%
+  filter(team != "Team")
+
+adj_totals$team <- adj_totals$team %>% str_replace_all("\n", " ")
+
+
+adj_totals <- adj_totals %>%
+  arrange(team) %>%
+  mutate_at(.vars = vars(market_adj_wins), .funs = as.numeric)
+
+# fixing misspelling
+adj_totals[adj_totals$team=="Tennesee Titans", "team"] <- "Tennessee Titans"
+
+adj_totals
+```
+
+
+
+
+
+
+```{r}
+pff_power <- read.csv('C:/Users/Myles/OneDrive/Documents/GitHubThings/all-files/pff-elite/nfl-power-ratings.csv')
+
+pff_power <- pff_power %>%
+  rename(team=Team) %>%
+  rename(power_rating = PFFELO.Power.Rating.Points) %>%
+  rename(opponent_diff = Opponent.Points.Diff.Remaining) %>%
+  select(team, power_rating, opponent_diff) %>% 
+  mutate(power_rating_after_opp = power_rating + opponent_diff) #%>% select(team, power_rating_after_opp)
+
+# saving power rating again (will be scaled)
+pff_power$power_rating_after_opp_scaled <- pff_power$power_rating_after_opp
+
+# scale, then use predict to put on
+scaling <- preProcess(pff_power[, c(1, 5)], method = "range")
+pff_power <- predict(scaling, pff_power)
+
+pff_power <- pff_power %>% arrange(team) %>%
+  # renaming "team" so i can remove it later easily
+  rename(abrev=team) %>%
+  # renaming power_rating to make it easier to read
+  rename(pff_elo_power_rating = power_rating)
+
+pff_power
+```
+
+```{r}
+# getting data from 2020
+url <- 'https://www.espn.com/nfl/standings'
+webpage <- read_html(url)
+tbls <- html_nodes(webpage, "table")
+head(tbls)
+
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1:4] %>%
+        html_table(fill = TRUE)
+
+
+# write function
+scrape_espn <- function(df, df2) {
+  conference_name <- df %>%
+  rename(team=X1) %>%
+  cbind(df2) %>%
+  rename(wins_2020=X1) %>%
+  rename(scores_2020 = X9) %>%
+  rename(against_2020 = X10) %>%
+  select(team, wins_2020, scores_2020, against_2020)
+  
+  conference_name <- conference_name %>%
+  mutate_at(.vars = vars(wins_2020, scores_2020, against_2020), .funs = as.numeric) %>%
+  filter(!is.na(wins_2020))
+
+  strings <- conference_name$team %>%
+  str_remove_all("-") %>% 
+  str_split(pattern = " ")
+
+  string <- c()
+  for (i in 1:16) {
+    string[i] <- strings[[i]][2]
+  }
+
+  # change team column to 'string'
+  conference_name$team <- string
+
+  # fix team name so i can remove it easier later
+  conference_name <- conference_name %>%
+  rename(messed_up_name = team)
+
+  return(conference_name)
+  
+}
+
+
+# get data
+afc <- scrape_espn(tables[[1]], tables[[2]])
+nfc <- scrape_espn(tables[[3]], tables[[4]])
+
+
+# cbind
+nfl <- afc %>% rbind(nfc) %>% arrange(messed_up_name)
+
+nfl
+```
+
+
+
+```{r}
+# cbind everything together
+bind <- cbind(adj_totals, pff_power, nfl)
+
+# grab needed
+bind <- bind %>%
+  select(-c(abrev, messed_up_name))
+
+bind
+```
+
+```{r}
+# create function to calculate pythagorean win total from 2020
+pythagorean_win_percentage <- function(points_for, points_against) {
+  
+  string <- points_for^2.37 / ((points_for^2.37) + (points_against^2.37))
+  
+  string <- string
+  
+  string <- round(string, 3)
+  
+  return(string)
+  
+}
+
+# add to bind
+bind$pythagorean_win_perc <- pythagorean_win_percentage(bind$scores_2020, bind$against_2020)
+
+# add 2020 pythagorean for what would be 17 games
+bind <- bind %>%
+  mutate(pythag_wins_2020_17_games = pythagorean_win_perc*17)
+
+bind
+```
+
+```{r}
+# making my function to begin scatterplots faster
+scatter_nfl <- function() {
+  
+}
+```
+
+
+```{r}
+# function that grabs team colors and joins on your df
+cbind_team_colors <- function(input_league, dataframe_organized_alphabetically) {
+  if (input_league=="nba") {
+    data <- read.csv('C:/Users/Myles/OneDrive/Documents/GitHubThings/all-files/nba-team-logos.csv')
+  } else {
+    data <- read.csv('C:/Users/Myles/OneDrive/Documents/GitHubThings/all-files/nfl-team-logos.csv')
+  }
+  
+  # cbind on dataframe
+  returned_df <- dataframe_organized_alphabetically %>%
+    cbind(data)
+  
+  # print this to ensure that all team names lined up properly
+  print(returned_df[,1]==data[,1])
+  
+  return(returned_df)
+}
+
+plot_with <- cbind_team_colors("nfl", bind)
+
+#plot_with$team==plot_with$name
+
+plot_with
+```
+
+
+```{r}
+scat <- plot_with %>% ggplot(aes(
+  x = market_adj_wins,
+  y = pythag_wins_2020_17_games
+)) +
+  ggimage::geom_image(aes(
+    x = market_adj_wins,
+    y = pythag_wins_2020_17_games,
+    image = logo_url
+  ), size=.068) +
+  #geom_point(size=2, aes(color=primary, fill=primary)) + 
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  geom_smooth(method="lm", se = F, color="black") +
+  #scale_x_continuous(breaks = c(1, seq(5, 50, 5))) + 
+  #scale_x_reverse(breaks = c(seq(50, 10, -10), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  labs(x = "Marked implied win total \n(taking into account vig)",
+       y = "Pythagorean win total in 2020 \n (extrapolated to 17 game season)",
+       title = "Marked implied win expectations vs. 2020 regular season pythagorean win total",
+       subtitle = "Dotted lines represent the mean value of each measure. Notice how the mean value for market-implied \nwins is above 8.5 (should be below 8.5 due to ties) which in general gives value on betting unders.",
+       caption = "<br>**Data:** Draft Kings | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 22),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_markdown(size = 16),
+    axis.text = element_text(size = 12),
+    axis.title.y = element_text(size = 11, face = "bold", angle = 90, vjust = 0.5),
+    axis.title.x = element_text(size = 14, face = "bold")
+    # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    ) + 
+  geom_hline(yintercept = mean(plot_with$pythag_wins_2020_17_games), color = "black", size = 1, linetype = 'dotted') +
+  geom_vline(xintercept = mean(plot_with$market_adj_wins), color = "black", size = 1, linetype = 'dotted')
+  
+  
+  
+scat
+
+
+ggsave(
+  filename = "pythagorean_study_2021.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = scat,
+  height = 10,
+  width = 15 * 1, # trying 15 instead of 10
+  dpi = "retina"
+  )
+
+```
+

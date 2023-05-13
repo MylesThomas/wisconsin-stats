@@ -1,0 +1,272 @@
+---
+title: "Packers Regression"
+author: "Myles Thomas"
+date: "5/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(tidyverse) # Data Cleaning, manipulation, summarization, plotting
+#library(gt) # beautiful tables
+library(DT) # beautiful interactive tables
+library(ggthemes) # custom pre-built themes
+#library(bbplot) # more themes
+library(ggtext) # custom text color
+library(teamcolors) # NFL team colors and logos
+library(ggforce) # better annotations
+library(ggridges) # many distributions at once
+library(ggrepel) # better labels
+library(ggbeeswarm) # beeswarm plots
+library(extrafont) # for extra fonts
+
+
+library(grid)
+```
+
+
+
+```{r grab 19 vegas total}
+# scraping 
+library(rvest)
+
+url <- "https://www.lineups.com/betting/nfl-2019-team-win-totals-odds/"
+
+webpage <- read_html(url)
+
+tbls <- html_nodes(webpage, "table")
+
+head(tbls)
+
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1] %>%
+        html_table(fill = TRUE)
+
+data <- tables[[1]]
+
+data <- data %>%
+  select(Team, `2019 Win Total`)
+
+data
+```
+
+
+
+
+
+```{r getting 2020 vegas total and actual wins}
+# scraping 
+url <- "https://dknation.draftkings.com/2020/11/16/21569545/nfl-win-total-over-under-betting-results-2020-updates"
+
+webpage <- read_html(url)
+
+tbls <- html_nodes(webpage, "table")
+
+head(tbls)
+
+
+# table
+table <- webpage %>%
+        html_nodes("table") %>%
+        .[1] %>%
+        html_table(fill = TRUE)
+
+# remove row 1
+data2 <- table[[1]][2:33, ]
+
+# rename
+data2 <- data2 %>%
+  rename("2020 Wins" = Wins) %>%
+  rename("2020 Win Total" = `O/U (preseason)`)
+
+data2
+```
+
+
+```{r getting actual wins 19}
+# scraping 
+url <- "https://www.nfl.com/standings/league/2019/reg"
+webpage <- read_html(url)
+tbls <- html_nodes(webpage, "table")
+head(tbls)
+
+
+# table
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1] %>%
+        html_table(fill = TRUE)
+
+data3 <- tables[[1]]
+
+data3 <- data3[order(data3$`NFL Team`), ]
+
+data3
+```
+
+
+```{r combine the dfs with old team names}
+old <- cbind(data, data3)
+
+old <- old %>%
+  select(Team, W, `2019 Win Total`) %>%
+  rename("2019 Wins" = W)
+
+old
+```
+
+
+
+
+
+```{r fix team names for old}
+# change Redskins to WFT, change Raiders to Las Vegas
+old$Team[25] <- "Las Vegas Raiders"
+
+old$Team[32] <- "WAS Football Team"
+
+
+```
+
+
+
+
+
+
+
+```{r combine all}
+join <- full_join(data2, old) %>%
+  select(Team, `2019 Win Total`, `2019 Wins`, `2020 Win Total`, `2020 Wins`)
+```
+
+```{r fix chr to numeric}
+new_nums <- mutate_all(.tbl = join[, -1], .funs = as.numeric)
+
+df <- cbind(join[,1], new_nums)
+
+df
+```
+
+
+```{r mutate in analysis}
+df <- df %>%
+  mutate(total_wins = `2019 Wins` + `2020 Wins`) %>%
+  mutate(expected_wins = `2019 Win Total` + `2020 Win Total`) %>%
+  mutate(difference = total_wins - expected_wins)
+
+df
+```
+
+
+
+```{r tack on colors and logos}
+library(nflfastR)
+logos_df <- nflfastR::teams_colors_logos
+
+# filter out unneeded
+logos_df <- logos_df %>%
+  filter(team_abbr != "LA") %>%
+  filter(team_name != "San Diego Chargers") %>%
+  filter(team_name != "Oakland Raiders") %>%
+  filter(team_name != "St. Louis Rams")
+  
+# fix df to have WAS be Washington
+df$Team[32] <- "Washington Football Team"
+
+joined_all <- dplyr::full_join(df, logos_df, by = c("Team"="team_name"))
+
+joined_all
+```
+
+
+```{r mutate in link to image and rank}
+# ranks
+joined_all$ranking <- rank(-joined_all$difference, ties.method = "first")
+joined_all$ranking_rev <- rank(joined_all$difference, ties.method = "first")
+
+# function
+link_to_img <- function(x, width = 50) {
+  glue::glue("<img src='{x}' width='{width}'/>")
+}
+
+# add
+joined_all <- joined_all %>%
+  mutate(label = link_to_img(team_logo_espn, width = 35))
+
+joined_all
+
+```
+
+
+
+
+
+
+```{r plot it}
+p1 <- ggplot(data = joined_all) +
+  geom_col(
+    aes(
+      x = ranking_rev,
+      y = difference,
+      fill = team_color,
+      color = team_color2
+    )
+  ) +
+  ggimage::geom_image(
+    aes(
+    x = ranking_rev,
+    y = difference,
+    image = team_logo_espn
+  ),
+  size = 0.065) +
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  theme_minimal() +
+  scale_x_continuous(breaks = c(1, seq(5, 30, by = 5)), limits = c(0.5, 34)) + 
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  labs(x = NULL,
+       y = "Wins +/- Expectation",
+       title = "Performance vs. Vegas win total expectation",
+       subtitle = "Last 2 regular seasons combined",
+       caption = "<br>**Data:** @NFL | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 13),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold", angle = 0, vjust = .5), # vjust = location on (0, 1)
+    axis.text.x = element_blank()
+    )
+
+p1
+
+
+
+ggsave(
+  filename = "nfl-totals-last-2-seasons.png",
+  plot = p1,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+
+
+
+
+
+
+

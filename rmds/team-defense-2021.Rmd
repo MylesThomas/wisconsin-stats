@@ -1,0 +1,438 @@
+---
+title: "team-defense-2021"
+author: "Myles Thomas"
+date: "6/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(nbastatR)
+library(tidyverse) # Data Cleaning, manipulation, summarization, plotting
+#library(gt) # beautiful tables
+library(DT) # beautiful interactive tables
+library(ggthemes) # custom pre-built themes
+#library(bbplot) # more themes
+library(ggtext) # custom text color
+library(teamcolors) # NFL team colors and logos
+library(ggforce) # better annotations
+library(ggridges) # many distributions at once
+library(ggrepel) # better labels
+library(ggbeeswarm) # beeswarm plots
+library(extrafont) # for extra fonts
+
+library(latex2exp) # Latex
+library(grid)
+```
+
+```{r scraping from ...}
+library(rvest)
+
+url <- "https://www.lineups.com/nba/team-rankings/defense"
+
+webpage <- read_html(url)
+
+tbls <- html_nodes(webpage, "table")
+
+head(tbls)
+
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1] %>%
+        html_table(fill = TRUE)
+
+data <- tables[[1]]
+
+data
+```
+
+
+
+
+```{r, eval=FALSE}
+install.packages("GGally")
+
+library(GGally)
+
+good_data <- data %>%
+  select(`PTS ALLOW`, `REB ALLOW`, `ORB ALLOW`, )
+
+
+GGally::ggpairs(data = data, cardinality_threshold = 32)
+```
+
+
+
+
+```{r}
+cor(data[, -1])
+
+```
+
+
+```{r}
+library(rvest)
+
+url <- "http://www.espn.com/nba/hollinger/teamstats"
+
+webpage <- read_html(url)
+
+tbls <- html_nodes(webpage, "table")
+
+head(tbls)
+
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1] %>%
+        html_table(fill = TRUE)
+
+hollinger <- tables[[1]]
+
+names_string <- as.vector(hollinger[2, ]) %>% as.character()
+
+names(hollinger) <- names_string
+
+hollinger <- hollinger[-c(1,2), ]
+hollinger$RK[5] <- 5
+hollinger$RK[13] <- 13
+
+teams_order <- hollinger$TEAM
+
+hollinger <- hollinger %>% mutate_all(.funs = as.numeric)
+
+hollinger$TEAM <- teams_order
+
+hollinger
+```
+
+
+```{r}
+cor(hollinger[, -c(1:2)])
+
+```
+
+
+
+```{r fixing data names to cities}
+ordered_data <- data[order(data$TEAM), ]
+
+ordered_hollinger <- hollinger[order(hollinger$TEAM), ]
+
+ordered_data$TEAM <- ordered_hollinger$TEAM
+
+ordered_data ; ordered_hollinger
+```
+
+
+
+
+
+```{r}
+join1 <- dplyr::full_join(x = ordered_data, y = ordered_hollinger[,-1])
+
+join1
+
+cor(join1[,-1])
+```
+
+```{r grab points allowed per game}
+url <- "https://www.teamrankings.com/nba/stat/opponent-points-per-game"
+  
+webpage <- read_html(url)
+
+tbls <- html_nodes(webpage, "table")
+
+head(tbls)
+
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1] %>%
+        html_table(fill = TRUE)
+
+team_pts_allowed <- tables[[1]]
+
+team_pts_allowed
+```
+
+
+```{r}
+ordered_team_pts_allowed <- team_pts_allowed[order(team_pts_allowed$Team), ]
+
+ordered_team_pts_allowed$Team <- ordered_hollinger$TEAM
+
+join2 <- dplyr::full_join(x = ordered_team_pts_allowed[, c(2:3)],
+                          y = ordered_hollinger[, c(2:3)],
+                          by = c("Team"="TEAM"))
+
+join2
+
+# ordered_team_pts_allowed[, c(2:3)];ordered_hollinger[, c(2:3)]
+
+cor(join2[, -1])
+```
+
+```{r}
+join2 <- join2 %>%
+  rename(PTS = "2020")
+
+
+nba_team_logos <- read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-team-logos.csv") ; nba_team_logos
+
+
+plot_data <- cbind(join2, nba_team_logos)
+
+summary(plot_data)
+```
+
+
+
+```{r scatterplot}
+p1 <- ggplot(data = plot_data) +
+  ggimage::geom_image(
+    aes(
+    x = PACE,
+    y = PTS,
+    image = logo_url
+  ),
+  size = 0.1) +
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  #geom_hline(yintercept = mean(plot_data$multiplied_3), color = "black", size = .3) +
+  #annotate(geom = "text", x = 9, y = (mean(plot_data$multiplied_3)+35), label = "mean", size = 1) +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(97, 109, 2)) + 
+  #scale_x_reverse(breaks = c(seq(30, 5, -5), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  labs(x = "Pace (possessions/game)",
+       y = "PPG \n Allowed",
+       title = "Predictive power of pace to points allowed",
+       subtitle = "2021 regular season",
+       caption = "<br>**Data:** Hollinger's Team Statistics | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 14),
+    plot.caption = element_markdown(size = 12),
+    axis.text = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold", angle = 0, vjust = .5),
+    axis.title.x = element_text(size = 13, face = "bold")
+    # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    ) +
+  geom_smooth(method="lm", aes(x = PACE, y = PTS), se = F, color="black") +
+  annotate(
+    geom = "text",
+    x = 104,
+    y = 109,
+    label = TeX(r'($R^{2}$ = 0.76)'),
+    size = 7
+  ) 
+
+p1
+
+
+
+ggsave(
+  filename = "scatterplot-PACE-vs-PTS-allowed.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = p1,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+
+
+```{r}
+ordered_data ; ordered_hollinger ; ordered_team_pts_allowed
+```
+
+```{r}
+cbind1 <- cbind(ordered_hollinger, ordered_team_pts_allowed[, c(2,3)])
+
+cbind1[, -c(1,2,13)] %>% cor()
+```
+
+
+```{r}
+plot_data2 <- cbind(cbind1, nba_team_logos)
+
+plot_data2 <- plot_data2 %>%
+  rename(PTS = "2020")
+
+plot_data2  
+```
+
+
+
+```{r scatterplot2}
+p2 <- ggplot(data = plot_data2) +
+  ggimage::geom_image(
+    aes(
+    x = `DEF EFF`,
+    y = PTS,
+    image = logo_url
+  ),
+  size = 0.1) +
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  #geom_hline(yintercept = mean(plot_data$multiplied_3), color = "black", size = .3) +
+  #annotate(geom = "text", x = 9, y = (mean(plot_data$multiplied_3)+35), label = "mean", size = 1) +
+  theme_minimal() +
+  #scale_x_continuous(breaks = seq(97, 109, 2)) + 
+  #scale_x_reverse(breaks = c(seq(30, 5, -5), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  labs(x = "Hollinger Defensive Efficiency",
+       y = "PPG \n Allowed",
+       title = "Predictive power of defensive efficiency to points allowed",
+       subtitle = "2021 regular season",
+       caption = "<br>**Data:** Hollinger's Team Statistics | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 14),
+    plot.caption = element_markdown(size = 12),
+    axis.text = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold", angle = 0, vjust = .5),
+    axis.title.x = element_text(size = 13, face = "bold")
+    # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    ) +
+  geom_smooth(method="lm", aes(x = `DEF EFF`, y = PTS), se = F, color="black") +
+  annotate(
+    geom = "text",
+    x = 113.5,
+    y = 109,
+    label = TeX(r'($R^{2}$ = 0.77)'),
+    size = 7
+  ) 
+
+p2
+
+
+
+ggsave(
+  filename = "scatterplot-EFF-vs-PTS-allowed.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = p2,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+
+
+```{r, eval=FALSE}
+# add def eff rank
+plot_data2$def_rank <- rank(plot_data2$`DEF EFF`, ties.method = "first")
+
+# add team colors
+plot_data2
+
+add_colors <-  read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-team-logos-and-colors.csv")
+
+add_colors2 <- add_colors %>%
+  rename(logo_url2 = logo_url)
+
+plot_data3 <- cbind(plot_data2, add_colors2) %>%
+  select(TEAM, def_rank, `DEF EFF`, logo_url, primary, secondary)
+
+plot_data3
+```
+
+
+```{r, eval=FALSE}
+nba_team_logos_and_colors <- cbind(teamcolors %>%
+  filter(league=="nba"), nba_team_logos) %>%
+  select(name:tertiary, logo_url)
+
+nba_team_logos_and_colors
+
+write.csv(nba_team_logos_and_colors,
+          "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-team-logos-and-colors.csv",
+          row.names = F)
+
+plot_data2
+```
+
+
+```{r}
+# add reverse rank
+plot_data3$def_rank2 <- rank(-plot_data2$`DEF EFF`, ties.method = "first")
+```
+
+
+
+```{r}
+# boxplot
+p3 <- ggplot(data = plot_data3) +
+  geom_col(
+    aes(
+      x = def_rank,
+      y = `DEF EFF`,
+      fill = primary,
+      color = secondary
+    )
+  ) +
+  ggimage::geom_image(
+    aes(
+    x = def_rank,
+    y = `DEF EFF`,
+    image = logo_url
+  ),
+  size = 0.048) +
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  #geom_hline(yintercept = mean(plot_data2$`DEF EFF`), color = "black", size = .3) +
+  #annotate(geom = "text", x = 9, y = (mean(plot_data2$`DEF EFF`)+10), label = "mean", size = 1) +
+  theme_minimal() +
+  #scale_x_continuous(breaks = c(1, seq(5, 30, 5))) + 
+  scale_x_reverse(breaks = c(seq(30, 5, -5), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  labs(x = NULL,
+       y = "Defensive \nefficiency",
+       title = "Ranking the best defensive teams - 2021 regular season",
+       subtitle = "Smaller efficiency number = better defense",
+       caption = "<br>**Data:** Hollinger's Team Statistics | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 13),
+    plot.caption = element_markdown(size = 13),
+    axis.text = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 15, face = "bold", angle = 0, vjust = .5) # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    ) +
+  coord_cartesian(ylim=c(100,115))
+
+p3
+
+
+
+ggsave(
+  filename = "team-rankings-defensive-eff.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = p3,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+

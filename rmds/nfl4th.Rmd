@@ -1,0 +1,44 @@
+---
+title: "set-up-nfl4th"
+author: "Myles Thomas"
+date: "7/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(nfl4th)
+```
+
+
+
+```{r}
+seasons <- 2014:2020
+
+data <- nfl4th::load_4th_pbp(seasons = seasons)
+
+data %>%
+  count(third_down_failed)
+```
+
+```{r}
+exponential <- rexp(n = 100, rate = 10)
+linear <- rnorm(n = 100, mean = 1/10, sd = 1)
+
+data1 <- data.frame(x = exponential,
+                   y = linear)
+
+correlation_before <- cor(data1$x, data1$y)
+
+ggplot(data = data1,
+       aes(
+  x = x,
+  y = y
+)) + geom_point() + annotate(geom = "text", label = round(correlation_before, 3), x = mean(data1$x), y = mean(data1$y))
+```
+

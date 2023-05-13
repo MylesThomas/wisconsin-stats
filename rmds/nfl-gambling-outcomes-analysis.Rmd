@@ -1,0 +1,100 @@
+---
+title: "nfl-gambling-outcomes-analysis"
+author: "Myles Thomas"
+date: "9/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r}
+library(gt)
+library(cfbscrapR)
+library(tidyverse)
+library(ggimage)
+library(tidyr)
+library(ggplot2)
+library(plyr)
+library(dplyr,warn.conflicts = FALSE)
+library(stringi)
+library(stringr)
+library(plotly,warn.conflicts = FALSE)
+library(readxl)
+library(reshape2,warn.conflicts = FALSE)
+library(scales)
+library(readr,warn.conflicts = FALSE)
+library(ggthemes)
+library(hrbrthemes, warn.conflicts = F)
+library(ggtext)
+library(nflscrapR)
+```
+
+
+```{r}
+# read in
+pff_greenline_history <- read_xlsx("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/PFF Greenline History_ NCAA.xlsx",
+                                   col_names = F)
+# take the number of NA rows
+num_na_rows <- 5
+
+# remove them
+pff_greenline_history <- pff_greenline_history[-c(1:num_na_rows), ]
+
+# remove the opening / closing / clv
+pff_greenline_history <- pff_greenline_history[, -c(9:14, 21:27)]
+
+# rename columns
+colnames(pff_greenline_history) <- pff_greenline_history[1, ]
+
+# remove columns row
+pff_greenline_history <- pff_greenline_history[-1, ]
+
+# change to numerics where necessary
+pff_greenline_history <- pff_greenline_history %>%
+  mutate_at(.vars = vars(Season:Week, `Home Score`:`Away Score`, `Market Line`:Difference), .funs = as.numeric)
+
+# add if-else of 0,1 for bet result
+x <- pff_greenline_history$`Bet Result`
+pff_greenline_history$binary <- dplyr::case_when(
+  x == "W" ~ 1,
+  x == "L" ~ 0,
+  x == "P" ~ NA_real_,
+  TRUE ~ NA_real_
+)
+
+# turn break even probability into multiplier, reciprocal of break-even-probability
+# possible units 
+# whether or not the bet won
+pff_greenline_history <- pff_greenline_history %>% mutate(multiplier = 1 / `Break-Even Probability`,
+                                                          possible_net_units = multiplier - 1,
+                                                          net_units = case_when(
+                                                            binary == 1 ~ possible_net_units,
+                                                            binary == 0 ~ -1,
+                                                            TRUE ~ 0
+                                                          ))
+
+# copy
+df <- pff_greenline_history
+
+df
+```
+
+```{r}
+value_plays <- df %>%
+  filter(Difference > 0)
+
+sum(value_plays$net_units)
+
+value_plays
+```
+
+
+
+
+
+

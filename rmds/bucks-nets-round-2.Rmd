@@ -1,0 +1,249 @@
+---
+title: "bucks-nets-round-2"
+author: "Myles Thomas"
+date: "6/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(readxl)
+bucks_nets_game_3 <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/bucks-nets-game-3.xlsx")
+bucks_nets_game_3
+```
+
+```{r}
+bucks_nets_game_3$`TS%` <- bucks_nets_game_3$`TS%` %>% as.numeric()
+bucks_nets_game_3$ORtg <- bucks_nets_game_3$ORtg %>% as.numeric()
+bucks_nets_game_3$DRtg <- bucks_nets_game_3$DRtg %>% as.numeric()
+
+bucks_nets_game_3 <- bucks_nets_game_3 %>% mutate(NetRating = ORtg - DRtg)
+
+bucks_nets_game_3
+```
+
+```{r}
+headshots <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-player-info-headshots.xlsx")
+
+headshots <- headshots %>%
+  select(Column1, headshot)
+
+headshots
+```
+
+```{r}
+join <- dplyr::left_join(x = bucks_nets_game_3, y = headshots, by = c("Starters"="Column1"))
+
+join[5, 7] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/200782.png" # pj tucker
+join[16, 7] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/1628455.png" # mike james
+
+join <- join %>%
+  select(logo_url, Starters, headshot, `TS%`, ORtg, DRtg, NetRating)
+
+join
+```
+
+```{r}
+join <- join[order(-join$NetRating), ]
+
+join
+```
+
+
+
+```{r}
+gt1 <- join %>%
+  gt() %>%
+  text_transform(
+    locations = cells_body(c(logo_url, headshot)),
+    fn = function(x) {
+      web_image(
+        url = x,
+        height = gt::px(30)
+      )
+    }
+  ) %>%
+  cols_label(
+    headshot = "",
+    logo_url = "",
+    Starters = "Name",
+    `TS%` = "True Shooting %",
+    ORtg = "Offensive \nRating",
+    DRtg = "Defensive \nRating",
+    NetRating = "Net \nRating"
+  ) %>%
+  tab_source_note(
+    source_note = md("SOURCE: BasketballReference <br>TABLE: @WisconsinStats")
+  ) %>%
+  tab_header(title = md("**Nets at Bucks - Game 3**"),
+             subtitle = md("Efficiency of players who played > 10 minutes")) %>%
+  gt_theme_538() %>%
+    data_color(
+    columns = c(`TS%`),
+    colors = scales::col_numeric(
+      domain = c(0,1),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) %>%
+  
+    data_color(
+    columns = c(NetRating),
+    colors = scales::col_numeric(
+      domain = c(-86,86),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) 
+
+gt1
+  
+# save
+gt::gtsave(data = gt1,
+           filename = "bucks-nets-game-3.png",
+           path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots")
+```
+
+
+
+
+## R Markdown - game 5
+
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tictoc)
+library(espnscrapeR)
+library(tidyverse)
+library(ggtext)
+library(adegenet)
+library(ggplot2)
+library(ggimage)
+library(extrafont)
+library(scales)
+library(ggthemes)
+library(gt)
+library(readxl)
+```
+
+
+
+```{r}
+# add in column: team logo_url by hand in excel
+read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-team-logos-and-colors.csv")
+```
+
+
+```{r}
+library(readxl)
+bucks_nets_game_5 <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/bucks-nets-game-5.xlsx")
+bucks_nets_game_5
+```
+
+```{r}
+bucks_nets_game_5$TS <- bucks_nets_game_5$TS %>% as.numeric()
+bucks_nets_game_5$ORtg <- bucks_nets_game_5$ORtg %>% as.numeric()
+bucks_nets_game_5$DRtg <- bucks_nets_game_5$DRtg %>% as.numeric()
+bucks_nets_game_5$BPM <- bucks_nets_game_5$BPM %>% as.numeric()
+
+
+bucks_nets_game_5 <- bucks_nets_game_5 %>% mutate(NetRating = ORtg - DRtg)
+
+bucks_nets_game_5
+```
+
+```{r}
+headshots <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-player-info-headshots.xlsx")
+
+headshots <- headshots %>%
+  select(Column1, headshot)
+
+headshots
+```
+
+
+
+
+```{r}
+join <- dplyr::left_join(x = bucks_nets_game_5, y = headshots, by = c("Starters"="Column1"))
+
+join[5, 8] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/200782.png" # pj tucker
+#join[16, 7] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/1628455.png" # mike james
+
+join <- join %>%
+  select(logo_url, Starters, headshot, TS, ORtg, DRtg, NetRating, BPM)
+
+join
+```
+
+```{r}
+plot_data <- join[order(-join$BPM), ]
+
+plot_data
+```
+
+
+
+```{r}
+gt2 <- plot_data %>%
+  gt() %>%
+  text_transform(
+    locations = cells_body(c(logo_url, headshot)),
+    fn = function(x) {
+      web_image(
+        url = x,
+        height = gt::px(30)
+      )
+    }
+  ) %>%
+  cols_label(
+    headshot = "",
+    logo_url = "",
+    Starters = "Name",
+    TS = "True Shooting %",
+    ORtg = "Offensive Rating",
+    DRtg = "Defensive Rating",
+    NetRating = "Net Rating"
+  ) %>%
+  tab_source_note(
+    source_note = md("SOURCE: BasketballReference <br>TABLE: @WisconsinStats")
+  ) %>%
+  tab_header(title = md("**Bucks at Nets - Game 5**"),
+             subtitle = md("Efficiency of players who played > 5 minutes")) %>%
+  gt_theme_538() %>%
+    data_color(
+    columns = c(TS),
+    colors = scales::col_numeric(
+      domain = c(0, 1.058),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) %>%
+    data_color(
+    columns = c(NetRating),
+    colors = scales::col_numeric(
+      domain = c(-80,80),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) %>%
+  data_color(
+    columns = c(BPM),
+    colors = scales::col_numeric(
+      domain = c(-25,25),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) 
+
+gt2
+  
+# save
+gt::gtsave(data = gt2,
+           filename = "bucks-nets-game-5.png",
+           path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots")
+```
+
+
+

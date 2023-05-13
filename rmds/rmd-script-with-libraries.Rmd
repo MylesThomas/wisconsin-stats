@@ -1,0 +1,37 @@
+---
+title: '-'
+author: "Myles Thomas"
+date: `Sys.Date()`
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+# load libraries
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(stringr)
+library(teamcolors)
+library(readxl)
+library(data.table)
+
+# more 
+library(tidyverse) # Data Cleaning, manipulation, summarization, plotting
+#library(gt) # beautiful tables
+library(DT) # beautiful interactive tables
+library(ggthemes) # custom pre-built themes
+#library(bbplot) # more themes
+library(ggtext) # custom text color
+library(teamcolors) # NFL team colors and logos
+library(ggforce) # better annotations
+library(ggridges) # many distributions at once
+library(ggrepel) # better labels
+library(ggbeeswarm) # beeswarm plots
+library(extrafont) # for extra fonts
+```

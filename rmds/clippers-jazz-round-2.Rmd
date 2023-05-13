@@ -1,0 +1,132 @@
+---
+title: "clippers-jazz-round-2"
+author: "Myles Thomas"
+date: "6/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+# players who played at least 10 min, dataframe
+data <- data.frame(
+  Name = c("Paul George", "Kawhi Leonard", "Marcus Morris", "Nicolas Batum", "Reggie Jackson", "Luke Kennard", "Rajon Rondo", "Ivica Zubac",
+           "Bojan Bogdanovic", "Donovan Mitchell",
+           "Royce O'Neale", "Rudy Gobert", "Joe Ingles",
+           "Jordan Clarkson", "Derrick Favors", "Georges Niang"),
+  eFG = c(.324, .500, .321, .750, .750, 1.000, .500, .600,
+           .536,.633,.400,.333,.292,.500,1.000,.375),
+  BPM = c(-4.4,4.2,-8.2,4.7,2,10.9,-1.7,13.1,
+          2.4,21.3,3.1,-5.7,-6.8,4.6,7.9,-8.8)
+)
+
+data
+```
+
+
+```{r}
+# add team logo at front
+team.logos <- teamcolors::teamcolors %>%
+  filter(name == "Los Angeles Clippers" | name == "Utah Jazz") %>%
+  select(name, logo)
+
+data$Team_logo <- c(
+  rep(team.logos$logo[1], 8),
+  rep(team.logos$logo[2], 8)
+)
+
+data
+```
+
+
+
+
+
+```{r}
+# combine with headshots
+headshots <- read_excel("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-player-info-headshots.xlsx")
+
+headshots <- headshots %>%
+  select(Column1, headshot) %>%
+  rename(Name = Column1)
+
+headshots[order(headshots$Name), ]
+```
+
+```{r}
+join <- left_join(x = data, y = headshots)
+
+join[3, 5] <- "https://a.espncdn.com/i/headshots/nba/players/full/6461.png"
+
+join[11, 5] <- "https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/latest/260x190/1626220.png"
+
+join <- join %>%
+  select(Team_logo, Name, headshot, eFG, BPM)
+
+join <- join[order(-join$BPM), ]
+
+join
+
+```
+
+
+
+```{r}
+gt1 <- join %>%
+  gt() %>%
+  text_transform(
+    locations = cells_body(c(Team_logo, headshot)),
+    fn = function(x) {
+      web_image(
+        url = x,
+        height = gt::px(30)
+      )
+    }
+  ) %>%
+  cols_label(
+    headshot = "",
+    Team_logo = "",
+    eFG = "Effective FG%",
+    BPM = "Box +/-"
+  ) %>%
+  tab_source_note(
+    source_note = md("SOURCE: BasketballReference <br>TABLE: @WisconsinStats")
+  ) %>%
+  tab_header(title = md("**Clippers vs. Jazz - Game 1**"),
+             subtitle = md("Efficiency of players who played > 10 minutes")) %>%
+  gt_theme_538() %>%
+  data_color(
+    columns = c(eFG),
+    colors = scales::col_numeric(
+      domain = c(.25, 1),
+      palette = c("#f8fcf8", "lightskyblue", "blue") # low number white, high number blue
+    )
+  ) %>%
+    data_color(
+    columns = c(BPM),
+    colors = scales::col_numeric(
+      domain = c(-21.5,21.5),
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) ; gt1
+
+
+  
+# save
+gt::gtsave(data = gt1,
+           filename = "clips-jazz-game1.png",
+           path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots")
+```
+
+
+##
+
+
+
+
+
+

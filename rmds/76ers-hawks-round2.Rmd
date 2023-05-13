@@ -1,0 +1,244 @@
+---
+title: "76ersHawks"
+author: "Myles Thomas"
+date: "6/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tictoc)
+library(espnscrapeR)
+library(tidyverse)
+library(ggtext)
+library(adegenet)
+library(ggplot2)
+library(ggimage)
+library(extrafont)
+library(scales)
+library(ggthemes)
+library(gt)
+library(readxl)
+```
+
+
+
+```{r get gt theme for 538 and espn}
+# espn
+gt_theme_espn <- function(data, ...){
+  data %>% 
+    opt_all_caps()  %>%
+    opt_table_font(
+      font = list(
+        google_font("Lato"),
+        default_fonts()
+      )
+    )  %>% 
+    opt_row_striping() %>% 
+    tab_options(
+      row.striping.background_color = "#fafafa",
+      table_body.hlines.color = "#f6f7f7",
+      source_notes.font.size = 12,
+      table.font.size = 16,
+      table.width = px(700),
+      heading.align = "left",
+      heading.title.font.size = 24,
+      table.border.top.color = "transparent",
+      table.border.top.width = px(3),
+      data_row.padding = px(7),
+      ...
+    ) 
+}
+
+# 538
+gt_theme_538 <- function(data,...) {
+  data %>%
+  opt_all_caps()  %>%
+  opt_table_font(
+    font = list(
+      google_font("Chivo"),
+      default_fonts()
+    )
+  ) %>%
+    tab_style(
+      style = cell_borders(
+        sides = "bottom", color = "transparent", weight = px(2)
+      ),
+      locations = cells_body(
+        columns = everything(),
+        # This is a relatively sneaky way of changing the bottom border
+        # Regardless of data size
+        rows = nrow(data$`_data`)
+      )
+    )  %>% 
+  tab_options(
+    column_labels.background.color = "white",
+    table.border.top.width = px(3),
+    table.border.top.color = "transparent",
+    table.border.bottom.color = "transparent",
+    table.border.bottom.width = px(3),
+    column_labels.border.top.width = px(3),
+    column_labels.border.top.color = "transparent",
+    column_labels.border.bottom.width = px(3),
+    column_labels.border.bottom.color = "black",
+    data_row.padding = px(3),
+    source_notes.font.size = 12,
+    table.font.size = 16,
+    heading.align = "left",
+    ...
+  ) 
+}
+
+```
+
+
+```{r}
+# get data for Game 2
+philly <- read_excel("datasets/philly6-9.xlsx")
+
+names(philly) <- philly[2, ]
+
+philly <- philly[-c(1:2, 15:18), ]
+
+philly
+```
+
+```{r}
+# add headshots
+rayjon_tucker <- "https://a.espncdn.com/i/headshots/nba/players/full/3908819.png"
+anthony_tolliver <- "https://a.espncdn.com/i/headshots/nba/players/full/3276.png"
+matisse_thybulle <- "https://a.espncdn.com/i/headshots/nba/players/full/3907498.png"
+ben_simmons <- "https://a.espncdn.com/i/headshots/nba/players/full/3907387.png"
+mike_scott <- "https://a.espncdn.com/i/headshots/nba/players/full/6622.png"
+paul_reed <- "https://a.espncdn.com/i/headshots/nba/players/full/4278562.png"
+shake_milton <- "https://a.espncdn.com/i/headshots/nba/players/full/3915195.png"
+tyrese_maxey <- "https://a.espncdn.com/i/headshots/nba/players/full/4431678.png"
+furkan_korkmaz <- "https://a.espncdn.com/i/headshots/nba/players/full/3929325.png"
+isaiah_joe <- "https://a.espncdn.com/i/headshots/nba/players/full/4395702.png"
+dwight_howard <- "https://a.espncdn.com/i/headshots/nba/players/full/2384.png"
+george_hill <- "https://a.espncdn.com/i/headshots/nba/players/full/3438.png"
+tobias_harris <- "https://a.espncdn.com/i/headshots/nba/players/full/6440.png"
+danny_green <- "https://a.espncdn.com/i/headshots/nba/players/full/3988.png"
+joel_embiid <- "https://a.espncdn.com/i/headshots/nba/players/full/3059318.png"
+seth_curry <- "https://a.espncdn.com/i/headshots/nba/players/full/2326307.png"
+gary_clark <- "https://a.espncdn.com/i/headshots/nba/players/full/3132042.png"
+
+vector1 <- c(
+  tobias_harris, 
+  joel_embiid,
+  ben_simmons,
+  seth_curry,
+  danny_green,
+  matisse_thybulle,
+  george_hill,
+  shake_milton,
+  dwight_howard,
+  furkan_korkmaz,
+  tyrese_maxey,
+  mike_scott
+)
+
+philly$headshots_url <- vector1
+```
+
+
+
+```{r}
+df <- philly %>%
+  select(Starters, headshots_url, `TS%`, ORtg:BPM)
+
+
+# fix characters into numerics
+df$`TS%` <- df$`TS%` %>% as.numeric()
+df$ORtg <- df$ORtg %>% as.numeric()
+df$DRtg <- df$DRtg %>% as.numeric()
+df$BPM <- df$BPM %>% as.numeric()
+
+# remove players who did not play above 6 minutes
+df <- df %>% slice(1:9)
+```
+
+
+```{r}
+gt1 <- df %>%
+  gt() %>%
+  text_transform(
+    locations = cells_body(c(headshots_url)),
+    fn = function(x) {
+      web_image(
+        url = x,
+        height = gt::px(30)
+      )
+    }
+  ) %>%
+  cols_label(
+    headshots_url = "",
+    Starters = "Name",
+    `TS%` = "True Shooting %",
+    ORtg = "Off. Rating",
+    DRtg = "Def. Rating",
+    BPM = "Box +/-"
+  ) %>%
+  tab_source_note(
+    source_note = md("SOURCE: BasketballReference <br>TABLE: @WisconsinStats")
+  ) %>%
+  tab_header(title = md("**Philadelphia 76ers Efficiency**"),
+             subtitle = md("Game 2 vs. Atlanta, Players who played > 6 minutes")) %>%
+  gt_theme_538() %>%
+  data_color(
+    columns = c(`TS%`),
+    colors = scales::col_numeric(
+      domain = NULL,
+      palette = c("#f8fcf8", "lightskyblue", "blue") # low number white, high number blue
+    )
+  ) %>%
+  data_color(
+    columns = c(ORtg),
+    colors = scales::col_numeric(
+      domain = NULL,
+      palette = c("#f8fcf8", "gray") # low number white, High number gray
+    )
+  ) %>%
+  
+  data_color(
+    columns = c(DRtg),
+    colors = scales::col_numeric(
+      domain = NULL,
+      palette = c("gray", "#f8fcf8")  # low number gray, High number white
+    )
+  ) %>%
+    data_color(
+    columns = c(BPM),
+    colors = scales::col_numeric(
+      domain = NULL,
+      palette = c("#ff2700", "#f8fcf8", "#44ab43") # low number RED, middle=white, high number GREEN
+    )
+  ) %>%
+  tab_spanner(
+    label = "Scoring",
+    columns = c(`TS%`)
+  ) %>%
+  tab_spanner(
+    label = "Efficiency",
+    columns = c(ORtg:BPM)
+  ) ; gt1
+
+
+  
+# save
+gt::gtsave(data = gt1,
+           filename = "philly-atl-game2.png",
+           path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots")
+```
+
+
+
+
+

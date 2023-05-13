@@ -1,0 +1,558 @@
+---
+title: "nbaSTATr"
+author: "Myles Thomas"
+date: "5/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(nbastatR)
+library(tidyverse) # Data Cleaning, manipulation, summarization, plotting
+#library(gt) # beautiful tables
+library(DT) # beautiful interactive tables
+library(ggthemes) # custom pre-built themes
+#library(bbplot) # more themes
+library(ggtext) # custom text color
+library(teamcolors) # NFL team colors and logos
+library(ggforce) # better annotations
+library(ggridges) # many distributions at once
+library(ggrepel) # better labels
+library(ggbeeswarm) # beeswarm plots
+library(extrafont) # for extra fonts
+
+
+library(grid)
+```
+
+
+```{r, eval=FALSE}
+nbastatR::box_scores(league = "NBA",
+                     box_score_types = c("Traditional", "Advanced"),
+                     result_types = c("team"),
+                     join_data = T,
+                     game_ids = c(games_vector))
+
+
+
+library(extrafont)
+font_import()
+#loadfonts(device = "win")
+```
+
+
+```{r}
+data_full2021 <- nbastatR::game_logs(seasons = 2021,
+                    league = "NBA",
+                    result_types = "team",
+                    season_types = "Regular Season") ; data_full2021
+
+data2021 <- data_full2021 %>%
+  dplyr::select(nameTeam, outcomeGame, pctFG3Team, fg3mTeam, idGame, plusminusTeam) ; data2021
+
+
+# winner
+winner2021 <- data2021 %>%
+  filter(outcomeGame == "W")
+
+# loser
+loser2021 <- data2021 %>%
+  filter(outcomeGame == "L")
+
+# join
+join <- dplyr::full_join(x = winner2021, y = loser2021, suffix = c(".win", ".loss"), by = c("idGame")) %>%
+  mutate("percentage.diff" = pctFG3Team.win - pctFG3Team.loss) %>%
+  mutate("makes.diff" = fg3mTeam.win - fg3mTeam.loss) %>%
+  select(c(nameTeam.win, outcomeGame.win, plusminusTeam.win, percentage.diff, makes.diff)) ; join
+```
+
+
+
+```{r}
+# calculating the "quadrants"
+join %>%
+  filter(makes.diff >= 0) %>%
+  filter(percentage.diff >= 0) # MORE ACCURATE + MORE VOLUME = 671 / 1080 = 62.1%
+
+join %>%
+  filter(makes.diff >= 0) %>%
+  filter(percentage.diff < 0) # LESS ACCURATE + MORE VOLUME = 89 / 1080 = 8.2%
+
+join %>%
+  filter(makes.diff < 0) %>%
+  filter(percentage.diff >= 0) # MORE ACCURATE + LESS VOLUME = 127 / 1080 = 11.8%
+
+join %>%
+  filter(makes.diff < 0) %>%
+  filter(percentage.diff < 0) # LESS ACCURATE + LESS VOLUME = 193 / 1080 = 17.9
+
+c(671, 89, 127, 193) / 1080
+```
+
+
+
+
+
+```{r}
+p1 <- join %>%
+  ggplot() + 
+  geom_point(alpha = .18,
+             aes(
+               size=plusminusTeam.win,
+               
+             x=makes.diff,
+             y=percentage.diff,
+             color="orange"
+             )) +
+  scale_size_continuous(range = c(.5, 8)) +
+  geom_vline(xintercept = 0) + 
+  geom_hline(yintercept = 0) +
+  labs(size = "Margin of victory") +
+
+    
+  annotate("text", x = -10, 0.3, label = "11.8% \n More accuracy, less volume") +
+  annotate("text", x = 20, 0.3, label = "% of wins = 62.1%") +
+  annotate("text", x = 20, -0.15, label = "8.2% \n Less accuracy, more volume") +
+  annotate("text", x = -10, -0.15, label = "17.9%") +
+ 
+
+  
+
+  theme_fivethirtyeight() +
+  theme_classic() +
+  theme_minimal() +
+  scale_x_continuous(breaks = c(seq(-15, 30, by = 5)), limits = c(-15, 25)) + 
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
+  labs(x = "Difference in makes",
+       y = "Difference in %",
+       title = "How much does 3 point volume and accuracy affect winning in the NBA?",
+       subtitle = "Games from 2021 regular season",
+       caption = "<br>**Data:** nbastatR | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(face = "bold", size = 17),
+    plot.subtitle = element_text(size = 13),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 10, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold", angle = 0, vjust = .5), # vjust = location on (0, 1)
+    axis.title.x = element_text(size = 13, face = "bold"), # vjust = location on (0, 1)
+    axis.text.x = element_text(size=10)
+    ) +
+  guides(color=F)  # remove legend for color
+
+p1
+
+
+ggsave(
+  filename = "3pt-effect-2021.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = p1,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+
+
+
+
+
+# Re-create with 2002-2020
+
+
+
+
+
+```{r}
+data_full <- nbastatR::game_logs(seasons = 2002:2020,
+                    league = "NBA",
+                    result_types = "team",
+                    season_types = "Regular Season")
+
+data <- data_full %>%
+  dplyr::select(nameTeam, outcomeGame, pctFG3Team, fg3mTeam, idGame, plusminusTeam) 
+
+
+# winner
+winners <- data %>%
+  filter(outcomeGame == "W")
+
+# loser
+losers <- data %>%
+  filter(outcomeGame == "L")
+
+# join
+join2 <- dplyr::full_join(x = winners, y = losers, suffix = c(".win", ".loss"), by = c("idGame")) %>%
+  mutate("percentage.diff" = pctFG3Team.win - pctFG3Team.loss) %>%
+  mutate("makes.diff" = fg3mTeam.win - fg3mTeam.loss) %>%
+  select(c(nameTeam.win, outcomeGame.win, plusminusTeam.win, percentage.diff, makes.diff)) ; join
+```
+
+
+
+
+
+```{r}
+# calculating the "quadrants"
+join2 %>%
+  filter(makes.diff >= 0) %>%
+  filter(percentage.diff >= 0) # MORE ACCURATE + MORE VOLUME = 12,901 / 22,835 = 56.5%
+
+join2 %>%
+  filter(makes.diff >= 0) %>%
+  filter(percentage.diff < 0) # LESS ACCURATE + MORE VOLUME = 2,388 / 22,835 = 10.5%
+
+join2 %>%
+  filter(makes.diff < 0) %>%
+  filter(percentage.diff >= 0) # MORE ACCURATE + LESS VOLUME = 2,758 / 22,835 = 12.1%
+
+join2 %>%
+  filter(makes.diff < 0) %>%
+  filter(percentage.diff < 0) # LESS ACCURATE + LESS VOLUME = 4,788 / 22,835 = 20.9%
+
+c(12901, 2388, 2758, 4788) / dim(join)[1]
+```
+
+
+
+
+```{r}
+p2 <- join2 %>%
+  ggplot() + 
+  geom_point(alpha = .12,
+             aes(
+               size=plusminusTeam.win,
+               
+             x=makes.diff,
+             y=percentage.diff,
+             color="orange"
+             )) +
+  scale_size_continuous(range = c(.5, 8)) +
+  geom_vline(xintercept = 0) + 
+  geom_hline(yintercept = 0) +
+  labs(size = "Margin of victory") +
+  
+  
+  
+  annotate("text", x = -10, 0.6, label = "12.1% \n More accuracy, less volume") +
+  annotate("text", x = 20, 0.6, label = "% of wins = 56.5%") +
+  annotate("text", x = 20, -0.5, label = "10.5% \n Less accuracy, more volume") +
+  annotate("text", x = -10, -0.5, label = "20.9%") +
+  
+
+  theme_fivethirtyeight() +
+  theme_classic() +
+  theme_minimal() +
+  scale_x_continuous(breaks = c(seq(-15, 30, by = 5)), limits = c(-15, 25)) + 
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 16)) +
+  labs(x = "Difference in makes",
+       y = "Difference in %",
+       title = "3pt shot has always been predictive, but not as powerful as it is today",
+       subtitle = "Games from 2002-2020 regular seasons (Note: see the more drastic differences in %'s)",
+       caption = "<br>**Data:** nbastatR | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    plot.title = element_text(face = "bold", size = 17),
+    plot.subtitle = element_text(size = 13),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 10, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold", angle = 0, vjust = .5), # vjust = location on (0, 1)
+    axis.title.x = element_text(size = 13, face = "bold"), # vjust = location on (0, 1)
+    axis.text.x = element_text(size=10)
+    ) +
+  guides(color=F) # remove legend for color
+
+p2
+
+
+ggsave(
+  filename = "3pt-effect-2002-2020.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = p2,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+
+
+## Plot team rankings vs 3pt % and makes ranking
+
+
+
+```{r}
+# join nba team colors with new logos
+tc <- teamcolors::teamcolors %>%
+  filter(league=="nba")
+
+library(readr)
+nba_team_logos <- read_csv("C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/datasets/nba-team-logos.csv")
+
+pictures <- dplyr::left_join(x = tc, y = nba_team_logos, by = c("name" = "TeamName")) %>%
+  select(name:tertiary, logo_url) ; pictures
+```
+
+
+```{r}
+# grab wins
+library(rvest)
+
+url <- "https://www.basketball-reference.com/leagues/NBA_2021_standings.html"
+
+webpage <- read_html(url)
+
+tbls <- html_nodes(webpage, "table")
+
+head(tbls)
+
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1:4] %>%
+        html_table(fill = TRUE) ; tables
+
+western_conf <- tables[[1]]
+eastern_conf <- tables[[2]]
+
+names(eastern_conf) <- names(western_conf) # align col names
+
+standings <- rbind(western_conf, eastern_conf) %>%
+  rename("Team" = `Eastern Conference`) %>%
+  rename("Wins" = W) %>%
+  select(Team:Wins) 
+standings
+standings2 <- standings[order(standings$Team), ] ; standings2
+```
+
+
+```{r}
+# combine with colors and logos
+colors_and_wins <- cbind(pictures, standings2) %>%
+  dplyr::select(name, Wins, primary:logo_url) ; colors_and_wins
+  
+```
+
+```{r}
+# get 3pt% rankings
+url <- "https://www.espn.com/nba/stats/team/_/season/2021/seasontype/2"
+
+webpage <- read_html(url)
+
+tbls <- html_nodes(webpage, "table") ; tbls
+
+# tables
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1:2] %>%
+        html_table(fill = TRUE) ; tables
+
+team_data <- cbind(tables[[1]], tables[[2]]) ; team_data
+
+threes_data <- team_data %>%
+  select(Team, `3PM`, `3P%`) ; threes_data
+
+threes_data_ordered <- threes_data[order(threes_data$Team), ] ; threes_data_ordered
+
+```
+
+
+```{r}
+# put it all together
+plot_data <- cbind(threes_data_ordered, colors_and_wins) %>%
+  select(-c(name)) ; plot_data
+
+# add rankings for 3pm and 3pperc
+plot_data$percent_rank <- rank(plot_data$`3P%`, ties.method = "first")
+plot_data$makes_rank <- rank(plot_data$`3PM`, ties.method = "first")
+
+
+# add multiplied value
+plot_data <- plot_data %>%
+  dplyr::mutate(multiplied_3 = `3PM`*`3P%`)
+
+# add ranking for this too
+plot_data$mult_rank <- rank(-plot_data$multiplied_3, ties.method = "first")
+
+plot_data
+```
+
+
+```{r}
+# boxplot
+p3 <- ggplot(data = plot_data) +
+  geom_col(
+    aes(
+      x = mult_rank,
+      y = multiplied_3,
+      fill = primary,
+      color = secondary
+    )
+  ) +
+  ggimage::geom_image(
+    aes(
+    x = mult_rank,
+    y = multiplied_3,
+    image = logo_url
+  ),
+  size = 0.055) +
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  geom_hline(yintercept = mean(plot_data$multiplied_3), color = "black", size = .3) +
+  annotate(geom = "text", x = 9, y = (mean(plot_data$multiplied_3)+35), label = "mean", size = 1) +
+  theme_minimal() +
+  #scale_x_continuous(breaks = c(seq(30, 5, -5), 1)) + 
+  scale_x_reverse(breaks = c(seq(30, 5, -5), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  labs(x = NULL,
+       y = "Factor of volume \n (makes per game) \n and accuracy (%)",
+       title = "Ranking the best 3 point shooting teams",
+       subtitle = "2021 regular season",
+       caption = "<br>**Data:** Basketball Reference | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 13),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold", angle = 0, vjust = .5) # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    )
+
+p3
+
+
+
+ggsave(
+  filename = "team-rankings-3p-perc.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = p3,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+
+
+## scatterplot of 3pt vs overall offense
+
+```{r}
+# get offensive rating numbers
+url <- "https://www.basketball-reference.com/leagues/NBA_2021_ratings.html"
+webpage <- read_html(url)
+tbls <- html_nodes(webpage, "table")
+head(tbls)
+
+tables <- webpage %>%
+        html_nodes("table") %>%
+        .[1] %>%
+        html_table(fill = TRUE) ; tables
+
+df_o_rating <- tables[[1]]
+
+names(df_o_rating) <- df_o_rating[1, ] # get header
+df_o_rating <- df_o_rating[-1, ] # remove row 1
+df_o_rating <- df_o_rating %>%
+  select(Team, ORtg)
+
+df_o_rating[2, 1] <- "LA Clippers" # fix name
+
+df_o_rating
+```
+
+
+```{r}
+# add ORtg to plot_data
+plot_data2 <- dplyr::full_join(x = plot_data, y = df_o_rating)
+
+# make ortg a numeric
+plot_data2$ORtg <- plot_data2$ORtg %>% as.numeric()
+
+plot_data2
+```
+
+
+
+
+```{r}
+# scatterplot
+p3 <- ggplot(data = plot_data2) +
+  ggimage::geom_image(
+    aes(
+    x = ORtg,
+    y = `3P%`,
+    image = logo_url
+  ),
+  size = 0.075) +
+  theme_fivethirtyeight() +
+  theme_classic() +
+  scale_color_identity(aesthetics =  c("fill", "color")) +
+  #geom_hline(yintercept = mean(plot_data$multiplied_3), color = "black", size = .3) +
+  #annotate(geom = "text", x = 9, y = (mean(plot_data$multiplied_3)+35), label = "mean", size = 1) +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(100, 120, 3)) + 
+  #scale_x_reverse(breaks = c(seq(30, 5, -5), 1)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  labs(x = "Offensive Rating",
+       y = "3P%",
+       title = "Predictive power of 3 point accuracy",
+       subtitle = "2021 regular season",
+       caption = "<br>**Data:** Basketball Reference | **Plot:** @WisconsinStats") +
+  theme(
+    text = element_text(family = "Chivo"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 20),
+    plot.subtitle = element_text(size = 13),
+    plot.caption = element_markdown(size = 10),
+    axis.text = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 13, face = "bold", angle = 0, vjust = .5),
+    axis.title.x = element_text(size = 13, face = "bold")
+    # vjust = location on (0, 1)
+    #axis.text.x = element_blank()
+    ) +
+  geom_smooth(method="lm", aes(x = ORtg, y = `3P%`), se = F, color="black") +
+  annotate(
+    geom = "text",
+    x = 107.8,
+    y = 37.5,
+    label = TeX(r'($R^{2}$ = 0.6243)')
+  ) 
+
+p3
+
+
+
+ggsave(
+  filename = "scatterplot-ORtg-vs-3pt.png",
+  path = "C:/Users/Myles/OneDrive/Documents/GitHubThings/twitter/plots",
+  plot = p3,
+  height = 10,
+  width = 10 * 1,
+  dpi = "retina"
+  )
+```
+
+
+```{r}
+lm(plot_data2$ORtg~plot_data2$`3P%`) %>% summary()
+
+lm(plot_data2$ORtg~plot_data2$`3PM`) %>% summary()
+
+lm(plot_data2$ORtg~plot_data2$multiplied_3) %>% summary()
+
+
+```
+
+
+

@@ -1,0 +1,58 @@
+---
+title: "pff-props-tool"
+author: "Myles Thomas"
+date: "9/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## PFF
+
+```{r}
+data_full <- readxl::read_excel(path = "C:/Users/Myles/OneDrive/Documents/props-tool.xlsx") %>%
+  mutate(multiplier = ifelse(price >= 0, price / 100, 100 /abs(price)),
+         implied_probability = ifelse(multiplier >= 1, 100 / (100+price), price / (price - 100)),
+         hypo_winnings = wager*multiplier,
+         hypo_payout = hypo_winnings + wager,
+         observed = payout - wager,
+         win = ifelse(observed < 0, 0, 1),
+         cover_prob = (value / 100)+implied_probability,
+         break_even_prob = cover_prob - (value / 100),
+         value_prob = cover_prob - break_even_prob,
+         EV = (cover_prob*multiplier*wager) - (wager*(1-cover_prob))) %>%
+  select(-c(value, implied_probability))
+
+data_full
+```
+
+```{r}
+# accuracy / profits
+wins <- sum(data_full$win, na.rm = T) ; wins
+games <- length(data_full$win) ; games
+
+accuracy_percentage <- wins / games ; accuracy_percentage
+```
+
+
+```{r}
+wagered <- sum(data_full$wager, na.rm = T)
+lost <- sum(ifelse(data_full$observed < 0, data_full$observed, 0), na.rm = T) 
+winnings_back <- sum(ifelse(data_full$observed < 0, 0, data_full$observed), na.rm = T)
+profits <- sum(data_full$observed, na.rm = T) 
+
+paste0("wagered: ", wagered)
+paste0("winners: ", winnings_back)
+paste0("losers: ", lost)
+paste0("profit: ", profits)
+```
+
+
+
+
+
+
+
+
